@@ -1,0 +1,163 @@
+Dalvik 运行环境虚拟机 运行时编译 android5.x版本开始，用ART模式取代Dalvik，安装时进行编译
+
+Context Activity Application Service
+
+
+一、Android系统信息获取 系统配置信息
+	1、android.os.Build 系统编译时的设备、配置信息
+		Build.BOARD 主板
+		Build.BRAND //系统定制商
+		Build.SUPPORTED_ABIS//CPU指令集
+		Build.DEVICE//设备参数
+		Build.DISPLAY//显示屏参数
+		Build.FINGERPRINT //唯一编号（fingerprint 指纹）
+		Build.SERIAL//硬件序列号
+		Build.ID//修订版本列表
+		Build.MANUFACTURER //硬件 制造商
+		Build.MODEL//版本
+		Build.HARDWARE//硬件名
+		Build.PRODUCT//手机产品名
+		Build.TAGS//描述Build的标签
+		Build.TYPE//Builder类型
+		Build.VERSION.CODENAME//当前开发代号
+		Build.VERSION.INCREMENTAL//源码控制版本号？
+		Build.VERSION.RELEASE//版本字符串
+		Build.VERSION.SDK_INT //版本号
+		Build.HOST//HOST值 
+		Build.USER//User名
+		Build.TIME//编译时间
+
+
+	2、SystemProperty 系统配置属性值和参数。很多信息与android.os.Build获取的值相同
+		os.version //os版本
+		os.name //
+		os.arch //os架构
+		user.home
+		user.name
+		user.dir
+		user.timezone
+		path.separator //路径分隔符
+		line.separator //行分隔符
+		file.separator //文件分隔符
+		java.vendor.url 
+		java.class.path
+		java.class.version
+		java.vender
+		java.version
+		java.home
+
+查看属性值：
+1、
+adb shell 
+$cd system
+$ls -l
+$cat build.prop 查看文件信息
+
+2、
+$getprop ro.build.id 等
+
+3、
+$cd proc
+$ls -l
+$cat cpuinfo 等
+
+
+
+-------------------------------------------
+
+	PM(PackageManager) 应用的包管理
+	AM(ActivityManager) 应用的活动管理
+
+二、Android APK应用信息获取---PackageManager
+
+	PackageManager
+		getPackageManager 返回PackageManager对象
+		getApplicationInfo 返回指定包名的ApplicationInfo
+		getApplicationIcon
+		getInstalledApplications 以ApplicationInfo的形式返回安装的应用
+		getInstalledPackages:以PackageInfo的形式返回安装的应用
+		queryIntentActivities:返回指定intent的ResolveInfo对象、Activity集合
+		queryIntentServices:返回指定intent的ResolveInfo对象、Service集合
+		resolveActivity 返回指定intent的Activity
+		resolveService 返回指定intent的Service
+
+-------------------------------------------
+
+
+三、Android APK应用信息获取---ActivityManager
+
+	ActivityManager.MemoryInfo 内存信息 全局的内存使用信息
+		availMem----系统可用内存
+		totalMem----总内存
+		threshold---低内存阈值
+		lowMemory---是否处于低内存
+	Debug.MemoryInfo   统计进程下的内存信息
+	RunningAppProcessInfo 运行进程的信息
+		processName
+		pid
+		uid
+		pkgList----该进程下的所有包
+	RunningServiceInfo  运行的服务信息
+		activeSince----第一次被激活的时间、方式
+		foreground----服务是否在后台执行
+
+-------------------------------------------
+
+
+四、解析Packages.xml获取系统消息
+	adb shell
+	$chmod 755 /data
+	$chmod 755 /data/system
+	$cd /data/system
+	$ls -l
+	$cp packages.xml ../../storage/emulated/0
+	$cd ~
+	$cd storage/emulated/0
+	$ls -l
+	$exit
+	adb pull /storage/emulated/0/packages.xml e:/packages.xml
+	e盘中查看文件
+	packages.xml :
+	android开机启动流程：在系统初始化时，PackageManager的底层实现类
+	PackageManagerService会去扫描系统中一些特定目录，并解析其中的apk文件。
+	同时把它获取的应用信息，保存在xml文件中，做成一个应用的花名册，
+	当系统中的apk安装、删除、升级时，它也会被更新。
+	这个小册子，就是位于/data/system/目录下的packages.xml文件
+
+	codePath :apk安装路径 /system/app  存放系统级别的apk或者是厂商定制的apk
+			      /data/app 存放用户安装的第三方apk
+	<perms>标签：对应apk的androidManifest 文件中<uses-permission>标签，记录权限
+
+
+-------------------------------------------
+
+五、安全机制
+
+	<1>、防线
+		1、混淆proguard  压缩代码、优化编译后的java字节码，增加阅读难度
+
+		2、应用接入权限控制----AndroidManifest文件权限声明、权限检查机制
+			Android检查操作者的权限顺序 确定使用者是否具有某项使用权限：
+			首先：判断permission名称。如果为空则直接返回PERMISSION_DENIED
+			其次：判断Uid。如果为0则为Root权限，不做权限控制
+			               如果为System Server则为系统服务，不做权限控制
+				       如果Uid与参数中的请求Uid不同，则返回PERMISSION_DENIED
+			最后：通过调用PackageManangerService.checkUidPermission()方法判断该Uid是否具有相应的权限。
+			      该方法会去xml的权限列表和系统级的platform.xml 中进行查找
+
+
+		3、应用签名机制-----数字证书
+
+		4、Linux内核层安全机制----Uid、访问权限控制
+			文件访问机制，权限控制由user、group、other与读(r)写(w)执行(x)的不同组合来实现
+			通常，只有System 、root用户才有权限访问到系统文件，一般用户无法访问
+
+		5、Android虚拟机沙箱机制-----沙箱隔离
+			可以让应用之间相互隔离，互不影响，即使一个应用崩溃也不会导致其他应用异常
+
+	<2>、系统安全隐患
+		1、代码漏洞
+		2、Root风险
+		3、安全机制不健全
+		4、用户安全意识
+		5、Android开发原则与安全 Android与iOS区别：开放系统封闭系统

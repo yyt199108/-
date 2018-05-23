@@ -1,0 +1,93 @@
+-----------IPC简介-----------
+ Android特色进程间通信方式：Binder 还支持Socket（可以实现任意两个终端之间通信）
+
+-----------Android中的多进程模式-----------
+ 通过给四大组件指定android:process属性，开启多进程模式
+
+	1、开启多进程模式（一个应用中存在多个进程的情况）
+		只有一种常规方法：给四大组件（Activity,Service,Receiver,ContentProvider）在AndroidMenifest中指定android:process属性。
+	查看进程 adb shell ps 或者 adb shell ps | grep com.yyt.test (包名中当前所存在的进程信息)
+
+	:remote 要在当前的进程名前面附加上当前的包名 属于当前应用的私有进程，其他应用的组件不可用和它跑在同一个进程中
+	不以":"开头的进程属于全局进程，其他应用通过ShareUID方式可以和它跑在同一个进程中
+	Android系统会为每个应用分配一个唯一的UID，具有相同UID的应用能共享数据（两个应用通过ShareUID跑在同一个进程中是有要求的：需要这两个应用有相同的ShareUID并且签名相同才可以）
+
+	使用多进程会造成如下几方面问题：
+	（1）静态成员和单例模式完全失效
+	（2）线程同步机制完全失效
+	（3）SharedPreferences的可靠性下降
+	（4）Application会多次创建
+
+实现跨进程通信方式：
+Intent
+共享文件和SharedPreferences
+基于Binder的Messenger
+AIDL
+Socket
+
+-----------IPC基础概念-----------
+Serializable和Parcelable接口可以完成对象的序列化过程 （通过Intent和Binder传输数据）
+
+把对象持久化到存储设备上或者通过网络传输给其他客户端，需要用到Serializable来完成对象的持久化
+
+-----------Android中的IPC方式---------------
+1 Bundle  当我们在一个进程中启动了另一个进程的Activity Service Receiver，我们就可以在Bundle中附加我们需要传输给远程进程的信息并通过Intent发送
+
+2 使用文件共享 适合在对数据同步要求不高的进程之间进行通信
+
+3 Messenger
+
+	服务端：
+
+	public class MessengerService extends Servcie{
+		private static class MessengerHandler extends Handler{
+			public void handleMessage(Message msg){
+				//--------3---------
+				msg.getData.getString(...);
+
+				//--------4 回复客户端---------
+				Messenger client=msg.replyTo;
+				Message replyMessage=Message.obtain(null,xx)
+				replyMessage.setData(bundle);
+				client.send(replyMessage);				
+			}
+		}
+		
+		//--------1-------------
+		private Messenger mMessenger=new Messenger(new MessengerHandler());
+
+		//----------2------------
+		public IBinder onBind(Intent intent){
+			return mMessenger.getBinder();
+		}	
+	}
+
+
+	客户端：
+
+	//--------1 需要接收服务端回复的Messenger---------
+	private Messenger mGetReplyMessenger=new Messenger(new MessengerHandler());
+
+	//-----------2-----------
+	bindService(intent,mConnection,Context.BIND_AUTO_CREATE);
+
+	//--------3---------
+	private Messenger mService;
+	mConnection=new ServiceConnection(){
+		onServiceConnected(ComponentName name,IBinder service){
+			//--------4---------
+			mService=new Messenger(service);
+			//--------5---------
+			Message msg=Message.obtain(null,xx);
+			msg.setData(bundle);
+			//--------6---------
+			msg.replyTo=mGetReplyMessenger;
+			mService.send(msg);
+		}
+	}
+//87页
+
+4 AIDL Android Interface Definition Language android接口定义语言
+
+5 ContentProvider 
+

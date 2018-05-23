@@ -1,0 +1,189 @@
+﻿git init 初始化
+
+git add readme.txt
+
+git commit -m "更改内容" 
+
+git log //查看提交的历史，以便确定要回退到哪个版本。
+
+git log --pretty=oneline //日志在一行显示
+
+git status //当前提交情况
+
+git reflog //查看命令历史，以便确定要回到未来的哪个版本
+
+stage（index）暂存区
+
+git diff 查看工作区和版本库里最新版本的区别
+git diff HEAD -- readme.txt
+
+git reset --hard HEAD^ 回退到上一个版本
+
+git reset --hard HEAD^^ 回退到上上一个版本
+
+git reset --hard HEAD~100 回退到上100个版本
+
+git reset --hard commit_id 回退到commit id编号的版本
+
+git reset HEAD file 把暂存区的修改撤销，重新放回工作区
+
+git reset 命令既可以回退版本，也可以把暂存区的修改回退到工作区。当我们用HEAD时，表示最新的版本。
+
+git checkout -- readme.txt 把readme.txt文件在工作区的修改全部撤销。两种情况：
+1、readme.txt自修改后还没有被放到暂存区，现在，撤销修改就回到和版本库一模一样的状态。
+2、readme.txt已经添加到暂存区后，又做了修改，现在，撤销修改就回到添加到暂存区后的状态。
+总之，就是让这个文件回到最近一次git commit 或git add时的状态
+
+git checkout -- file 命令中的--很重要。如果没有--，就变成了“切换到另一个分支”的命令。
+
+场景1：当你改乱了工作区某个文件的内容，想直接丢弃工作区的修改时，用命令git checkout -- file。
+
+场景2：当你不但改乱了工作区某个文件的内容，还添加到了暂存区时，想丢弃修改，分两步，第一步用命令git reset HEAD file，就回到了场景1，第二步按场景1操作。
+
+场景3：已经提交了不合适的修改到版本库时，想要撤销本次提交，参考版本回退一节，不过前提是没有推送到远程库。
+
+
+git rm file 删除文件。如果一个文件已经被提交到版本库，不用担心误删。但是只能回复文件到最新版本，会丢失最近一次提交后你修改的内容
+
+
+
+
+///==============远程Git仓库==============
+
+1、GitHub账号
+
+2、在用户主目录（例如linux root 或者登录用户的home/name下）是否有.ssh文件夹。如果有，查看该目录下是否有id_rsa 和id_rsa.pub文件，如果有，可以到下一步。如果没有，打开Shell（Windows下打开Git Bash),创建SSH Key：
+$ ssh-keygen -t rsa -C "youremail@example.com" 
+一路回车，使用默认值即可。由于这个key不是用于军事目的，所以也无需设置密码。
+	id_rsa和id_rsa.pub这两个文件，是SSH Key的密钥对，id_rsa是私钥，不能泄漏。id_rsa.pub 是公钥，可以告诉任何人。
+
+3、登录GitHub Account settings--SSH Keys，在Key文本中粘贴id_rsa.pub文件中内容。
+	为什么GitHub需要SSH Key呢？因为GitHub需要识别出你推送的提交确实是你推送的，而不是别人冒充的，而Git支持SSH协议，所以，GitHub只要知道了你的公钥，就可以确认只有你自己才能推送。
+	当然，GitHub允许你添加多个Key。假定你有若干电脑，你一会儿在公司提交，一会儿在家里提交，只要把每台电脑的Key都添加到GitHub，就可以在每台电脑上往GitHub推送了。
+
+4、创建仓库
+
+
+///====================远程GitHub仓库（先有本地库，后有远程库的时候，如何关联远程库）start ==========================
+
+5、推送
+	$ git remote add origin git@github.com:yyt199108/leartGit.git
+	$ git push -u origin master
+** orgin:远程库的名字，Git默认叫法，可以改成别的，但是origin这个名字一看就知道是远程库
+** git push 把本地库的内容推送到远程，实际上是把当前分支master推送到远程。
+** 由于远程库是空的，第一次推送master分支时，加上了 -u 参数，Git不但会把本地的master分支内容推送到远程新的master分支，还会把本地的master分支和远程的master分支关联起来，在以后的推送或拉取时就可以简化命令。
+	之后只有本地做了提交，就可以通过命令：
+	$ git push origin master
+	把本地master分支的最新修改推送至GitHub
+
+SSH警告：
+第一次使用Git的clone或者push命令连接GitHub时，会得到一个警告：
+	The authenticity of host 'github.com (192.30.255.113)' can't be established.
+RSA key fingerprint is 16:27:ac:a5:76:28:2d:36:63:1b:56:4d:eb:df:a6:48.
+Are you sure you want to continue connecting (yes/no)? 
+	这是因为Git使用SSH连接，而SSH连接在第一次验证GitHub服务器的Key时，需要你确认GitHub的Key的指纹信息是否真的来自GitHub的服务器，输入yes回车即可。
+	Git会输出一个警告，告诉你已经把GitHub的Key添加到本机的一个信任列表里了：Warning: Permanently added 'github.com' (RSA) to the list of known hosts.
+这个警告只会出现一次，后面的操作就不会有任何警告了。
+如果你实在担心有人冒充GitHub服务器，输入yes前可以对照GitHub的RSA Key的指纹信息（https://help.github.com/articles/github-s-ssh-key-fingerprints/）是否与SSH连接给出的一致。
+
+///====================远程GitHub仓库（先有本地库，后有远程库的时候，如何关联远程库）end ==========================
+
+
+///====================远程GitHub仓库（先创建远程库，然后，从远程库克隆）start ==========================
+1、clone命令：
+$ git clone git@github.com:yyt199108/gitSkills.git
+///====================远程GitHub仓库（先创建远程库，然后，从远程库克隆）end ==========================
+
+
+
+
+//--------------------分支------------------
+
+git branch  //查看分支
+
+git branch <name> //创建分支
+
+git checkout <name> //切换分支
+
+git checkout -b <name> //创建并切换分支
+
+git merge <name> //合并某分支到当前分支
+
+git branch -d <name> //删除分支
+
+**HEAD指向的是当前分支
+
+当创建新分支，例如dev，Git新建了一个指针叫dev，指向master相同的提交，再把HEAD指向dev，就表示当前分支在dev上。
+
+dev分支对工作区进行修改和提交后，dev指针往前移动一步，而master指针不变。
+
+当dev工作完成后，就可以把dev合并到master上。即把master指针指向dev当前的提交。
+
+合并完后，可以删除dev分支。即删除dev指针。
+
+
+//-----冲突
+
+git merge 发生冲突时，解决冲突，再add commit
+
+git log --graph 命令可以看到分支合并图
+
+git log --graph --pretty=oneline --abbrev-commit
+
+
+//----------分支管理策略------------
+合并分支时，如果可能（无冲突），Git会用Fast forward模式，但这种模式下，删除分支后，会丢掉分支信息。
+如果要强制禁用Fast forward模式，Git就会在merge时生成一个新的commit，这样，从分支历史上就可以看出分支信息。
+
+git merge --no-ff -m "merge with no-ff" dev  //合并dev分支。--no-ff参数表示禁用Fast forward. 这样的合并要创建一个新的commit，所以加-m参数，把commit描述写进去。
+合并后再用git log --graph --pretty=oneline --abbrev-commit查看分支历史。
+
+***分支策略 原则
+*****首先，master分支应该是非常稳定的，也就是仅用来发布新版本，平时不能在上面干活；
+*****干活都在dev分支上，就是说，dev分支是不稳定的，到某个时候，比如1.0版本发布时，再把dev分支合并到master上，在master分支发布1.0版本
+*****你和你的小伙伴们每个人都在dev分支上干活，每个人都有自己的分支，时不时的往dev分支上合并就可以了
+*****合并分支时，加上--no-ff参数就可以普通模式合并，合并后的历史有分支，能看出来曾经做过合并，而非fast forward 合并就看不出来曾经做过合并。
+
+//=====================bug分支
+
+修复bug时，我们会通过创建新的bug分支进行修复，然后合并，最后删除。
+当手头工作没有完成时，先把工作现场git stash一下，然后去修改bug，修复后，再git stash pop,回到工作现场。
+
+git stash  //把当前工作现场“储藏”起来。
+
+git stash list // 查看当前储藏的工作现场
+
+git stash pop // 恢复现场，并删除stash内容（查看stash list 没有数据）
+=
+git stash apply//恢复
++
+git stash drop //丢弃
+
+git stash apply stash@{0} //多次stash，恢复时，先用git stash list 查看，然后恢复指定的stash。
+
+
+//-------------------------多人协作---------------------
+
+git remote  //查看远程库的信息
+
+git remote -v //显示更详细的远程库信息（显示抓取和推送的origin地址，如果没有推送权限，看不到push的地址）
+
+远程库的默认名称是origin
+
+git push origin master 
+git push origin dev //推送dev分支的本地提交
+本地新建的分支如果不推送到远程，对其他人就是不可见的。
+
+master是主分支，要时刻与远程同步。
+dev是开发分支，团队所有成员都需要在上面工作，所以也需要与远程同步
+bug分支只用于在本地修复bug，没必要推送到远程
+feature分支是否推送到远程，取决于你是否和你的小伙伴合作在上面开发
+总之，就是在Git中，分支完全可以在本地自己藏着玩，是否推送，视你的心情而定！
+
+多人协作工作模式：
+1、首先，可以试图用git push origin branch-name 推送自己的修改
+2、如果推送失败，则因为远程分支比你的本地更新，需要先用git pull抓取远程的新提交。
+3、a.在本地创建和远程分支对应的分支，使用git checkout -b branch-name origin/branch-name,本地和远程分支的名称最好一致。
+   b.建立本地分支和远程分支的关联，使用git branch --set-upstream branch-name origin/branch-name(如果git pull提示“no tracking information”，则说明本地分支和远程分支的链接关系没有创建)
+4、如果合并有冲突，则解决冲突，并在本地提交
+5、没有冲突或者解决掉冲突后，再用git push origin branch-name推送就能成功！

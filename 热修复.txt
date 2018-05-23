@@ -1,0 +1,132 @@
+﻿热修复是为了修复Bug，所以要将新的同名类替代同名的bug类，要抢先加载新的类而不是bug类，在原先的app打包的时候，阻止相关类去打上CLASS_ISPREVERIFIED标志，还有在热修复时动态改变BaseDexClassLoader对象间接引用的dexElements,这样才能抢先代替Bug类，完成系统不加载旧的Bug类。
+
+1、底层热替换原理
+	1.1、Andfix
+		即时生效
+		  app运行到一半时，所有需要发生变更的分类已经被加载过了，在Android上是无法对一个分类进行卸载的。
+		  
+		  腾讯系的方案（Tinker），让Classloader去加载新的类。如果不重启，原来的类还在虚拟机中，就无法加载新类。只有在下次重启的时候，在还没走到业务逻辑之前抢先加载补丁中的新类，后续访问这个类时，就会Resolve为新的类。从而达到热修复的目的。
+
+		Andfix：在已经加载了的类中直接在native层替换掉原有的方法，是在原来类的基础上进行修改的。
+		核心：replaceMethod函数
+		@AndFix/src/com/alipay/euler/andfix/AndFix.java
+		private static native void replaceMethod(Method src,Method dest);
+		src:需要被替换的原有方法（反射机制得到Method对象所对应的jobject）
+		dest:新方法，存在于补丁包的新类中。
+		replace_6_0(JNIEnv* env,jobject src,jobject dest){
+			//通过Method对象得到底层Java函数对应ArtMethod的真实地址
+			art::mirror::ArtMehtod* smeth=
+				  (art::mirror::ArtMethod)env->FromReflectedMethod(src);
+			art::mirror::ArtMehtod* dmeth=
+				 (art::mirror::ArtMethod)env->FromReflectedMethod(dest);
+			//把旧函数的所有成员变量替换为新函数的
+			smeth->declaring_class_=dmeth->declaring_class_;
+			smeth->dex_cache_resolved_methods_=dmeth->dex_cache_resolved_methods_;
+			smeth->dex_cache_resolved_types_=dmeth->dex_cache_resolved_types;
+			...
+		}
+		这样全部替换后就完成了热修复逻辑。以后调用这个方法就会直接走到新方法的实现中。
+
+	1.2、虚拟机调用方法原理
+			虚拟机调用方法的原理。
+			android6.0，art虚拟机中ArtMehtod的结构：
+			@art/runtime/art_method.h
+			class ArtMethod FINAL{
+				GcRoot<mirror::Class> declaring_class_;
+				
+				//Short cuts to declarin_class->dex_cache_member for fast compiled code access
+				//存放ArtMethod*的指针数组，通过它可以访问到这个Method所在Dex中所有的Method所对应的ArtMethod*。
+				GcRoot<mirro::PointerArray> dex_cache_resolved_methods_;
+				
+				GcRoot<mirror:ObjectArray<mirror::Class>> dex_cache_resolved_types_;
+
+				uint32_t access_flags_;
+
+				uint32_t dex_code_item_offset_;
+
+				uini32_t dex_method_index_;
+
+				uint32_t method_index_;
+
+				struct PACKED(4) PtrSizedFields{
+					//方法的执行入口
+					//Method dispatch from the interpreter invokes this pointer which may cause a bridge into
+					//compiled code
+					void* entry_point_from_interperter_;
+
+					void* entry_point_from_jni_;
+
+					//方法的执行入口
+					//Method dispatch from quick compiled code invokes this pointer which may cause bridging into
+					void* entry_point_from_quick_compiled_code_;
+				} ptr_sized_fields_;
+
+			}
+
+			art中可以采用解释模式或者AOT机器码模式执行 dex Code
+			解释模式：
+				取出dexCode逐条解释。如果方法的调用者是以解释模式运行的，在调用这个方法时，就会取得这个方法的entry_point_from_interpreter_,然后跳转过去执行。
+
+			AOT模式
+				先预编译好DexCode对应的机器码，然后运行期直接执行机器码，不需要逐条解释DexCode。如果方法的调用者是以AOT模式运行的，在调用这个方法时，跳转到entry_point_from_quick_compiled_code_执行。
+
+				Q：那我们是否是只需要替换这几个entry_point_*入口地址就能够实现方法替换了呢？
+				A：No。不论是解释模式还是AOT机器码模式，在运行期间还会需要用到ArtMethod里面的其他成员字段。
+
+				AOT机器码的执行过程，还是会有对于虚拟机以及ArtMethod其他成员字段的依赖。
+				因此，当把一个旧方法的所有成员字段都换成新方法后，执行所有数据就可以保持和新方法的一致。这样在所有执行到旧方法的地方，会取得新方法的执行入口、所属class、方法索引号以及所属dex信息，然后像调用旧方法一样顺滑的执行到新方法的逻辑。
+
+	1.3、兼容性问题的根源
+		native替换方案，比如Andfix和其他安全界的Hook方案，都是写死了ArtMethod结构体，这会带来巨大的兼容问题。
+
+		Andfix把底层结构强转为art::mirror::ArtMethod，但这里的art::mirror::ArtMethod并非等同于app运行时所在设备虚拟机底层的art::mirror:ArtMethod,而是Andfix自己构造的art::mirror:ArtMethod
+
+		@Andfix/jni/art/art_6.0.h
+			class ArtMethod {
+			public:
+				uinit32_t declaring_class_;
+				
+				//Short cuts to declarin_class->dex_cache_member for fast compiled code access
+				//存放ArtMethod*的指针数组，通过它可以访问到这个Method所在Dex中所有的Method所对应的ArtMethod*。
+				uinit32_t dex_cache_resolved_methods_;
+				
+				uinit32_t dex_cache_resolved_types_;
+
+				uint32_t access_flags_;
+
+				uint32_t dex_code_item_offset_;
+
+				uini32_t dex_method_index_;
+
+				uint32_t method_index_;
+
+				struct PtrSizedFields{
+					//方法的执行入口
+					//Method dispatch from the interpreter invokes this pointer which may cause a bridge into
+					//compiled code
+					void* entry_point_from_interperter_;
+
+					void* entry_point_from_jni_;
+
+					//方法的执行入口
+					//Method dispatch from quick compiled code invokes this pointer which may cause bridging into
+					void* entry_point_from_quick_compiled_code_;
+				} ptr_sized_fields_;
+
+			}
+
+			ArtMethod结构里的各个成员的大小是和AOSP开源代码里完全一致。
+
+			如果某个厂商修改该了ArtMethod结构体，就和原先开源代码里的结构不一致，那么在这个修改过了的设备上，替换机制就会出问题。
+
+	1.4、突破底层结构差异
+		整体替换ArtMethod：
+			繁琐的替换：
+			smeth->declaring_class_=dmeth->declaring_class_;
+			smeth->dex_cache_resolved_methods_=dmeth->dex_cache_resolved_methods_;
+			smeth->dex_cache_resolved_types_=dmeth->dex_cache_resolved_types;
+			...
+			浓缩成：
+			memcpy(smeth,dmeth,sizeof(ArtMethod));
+			把整个ArtMethod结构体完整替换了，就能够把所有旧方法成员自动对应的换成新方法的成员。
+			

@@ -1,0 +1,23 @@
+1、StringBuilder代替String进行频繁字符串拼接
+2、ArrayMap和SparseArray代替HashMap
+3、内存抖动 申请大量内存-》弃之不用-》申请大量内存-》弃之不用。。。
+
+再小的Class耗费 0.5Kb
+HashMap一个entry需要额外占用32B
+
+对象复用
+复用系统自带的资源
+ListView、GridView的ConvertView复用，Recyclerview
+避免在onDraw方法里执行对象的创建
+
+避免内存泄漏
+内存泄漏会导致剩余可用的Heap越来越少，频繁触发GC
+尤其是Activity泄漏
+用ApplicationContext而不是ActivityContext
+注意Cursor对象是否及时关闭
+
+OOM问题优化out of memory
+1、注意临时Bitmap对象的及时回收
+2、避免Bitmap的浪费
+3、Try catch某些大内存分配的操作
+4、加载Bitmap：缩放比例、解码格式、局部加载
